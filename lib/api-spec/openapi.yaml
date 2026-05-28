@@ -1,0 +1,953 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: SAM3 Auto Dataset Factory API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: datasets
+    description: Dataset management
+  - name: jobs
+    description: Auto-label job management
+  - name: annotations
+    description: Annotation management
+  - name: exports
+    description: YOLO export operations
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /server-info:
+    get:
+      operationId: getServerInfo
+      tags: [health]
+      summary: Get inference server info
+      responses:
+        "200":
+          description: Server information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerInfo"
+
+  /datasets:
+    get:
+      operationId: listDatasets
+      tags: [datasets]
+      summary: List all datasets
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: List of datasets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetList"
+    post:
+      operationId: createDataset
+      tags: [datasets]
+      summary: Create a new dataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetInput"
+      responses:
+        "201":
+          description: Dataset created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dataset"
+
+  /datasets/{datasetId}:
+    get:
+      operationId: getDataset
+      tags: [datasets]
+      summary: Get dataset by ID
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Dataset detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dataset"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteDataset
+      tags: [datasets]
+      summary: Delete dataset
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  /datasets/{datasetId}/images:
+    get:
+      operationId: listDatasetImages
+      tags: [datasets]
+      summary: List images in a dataset
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: split
+          in: query
+          schema: { type: string, enum: [train, val, test, all], default: all }
+      responses:
+        "200":
+          description: Paginated image list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageList"
+
+  /datasets/{datasetId}/upload:
+    post:
+      operationId: uploadImages
+      tags: [datasets]
+      summary: Upload images to dataset (multipart/form-data, handled via direct fetch)
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Upload result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List all jobs
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [queued, running, completed, failed, cancelled, paused]
+      responses:
+        "200":
+          description: Job list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobList"
+
+  /jobs/auto-label:
+    post:
+      operationId: createAutoLabelJob
+      tags: [jobs]
+      summary: Create an auto-label job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoLabelJobInput"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get job by ID
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Job detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/cancel:
+    post:
+      operationId: cancelJob
+      tags: [jobs]
+      summary: Cancel a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/resume:
+    post:
+      operationId: resumeJob
+      tags: [jobs]
+      summary: Resume a paused job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Job resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /images/{imageId}/annotations:
+    get:
+      operationId: listAnnotations
+      tags: [annotations]
+      summary: Get annotations for an image
+      parameters:
+        - name: imageId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: minConfidence
+          in: query
+          schema: { type: number, default: 0 }
+      responses:
+        "200":
+          description: Annotation list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Annotation"
+    post:
+      operationId: createAnnotation
+      tags: [annotations]
+      summary: Manually create annotation
+      parameters:
+        - name: imageId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationInput"
+      responses:
+        "201":
+          description: Annotation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Annotation"
+
+  /annotations/{annotationId}:
+    put:
+      operationId: updateAnnotation
+      tags: [annotations]
+      summary: Update annotation
+      parameters:
+        - name: annotationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationUpdate"
+      responses:
+        "200":
+          description: Updated annotation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Annotation"
+    delete:
+      operationId: deleteAnnotation
+      tags: [annotations]
+      summary: Delete annotation
+      parameters:
+        - name: annotationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  /images/{imageId}/reprocess:
+    post:
+      operationId: reprocessImage
+      tags: [annotations]
+      summary: Re-run SAM3 on a single image
+      parameters:
+        - name: imageId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReprocessInput"
+      responses:
+        "200":
+          description: Reprocess started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReprocessResult"
+
+  /exports:
+    post:
+      operationId: createExport
+      tags: [exports]
+      summary: Create YOLO export
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportInput"
+      responses:
+        "201":
+          description: Export created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+    get:
+      operationId: listExports
+      tags: [exports]
+      summary: List exports
+      parameters:
+        - name: datasetId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Export list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Export"
+
+  /exports/{exportId}:
+    get:
+      operationId: getExport
+      tags: [exports]
+      summary: Get export by ID
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Export detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+
+  /stats/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [health]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ServerInfo:
+      type: object
+      properties:
+        status:
+          type: string
+        device:
+          type: string
+        model_loaded:
+          type: boolean
+        model_name:
+          type: string
+        max_batch_size:
+          type: integer
+        available_memory_gb:
+          type: ["number", "null"]
+        mock_mode:
+          type: boolean
+      required: [status, device, model_loaded, model_name, max_batch_size, mock_mode]
+
+    ClassDefinition:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        prompt:
+          type: string
+        color:
+          type: ["string", "null"]
+      required: [id, name, prompt]
+
+    Dataset:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        classes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassDefinition"
+        image_count:
+          type: integer
+        annotated_count:
+          type: integer
+        train_split:
+          type: number
+        val_split:
+          type: number
+        test_split:
+          type: number
+        output_mode:
+          type: string
+          enum: [bbox_only, segmentation_only, bbox_and_segmentation]
+        prompt_type:
+          type: string
+          enum: [text, bbox, point]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - classes
+        - image_count
+        - annotated_count
+        - train_split
+        - val_split
+        - test_split
+        - output_mode
+        - prompt_type
+        - created_at
+        - updated_at
+
+    DatasetInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        classes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassDefinition"
+        train_split:
+          type: number
+          default: 0.8
+        val_split:
+          type: number
+          default: 0.1
+        test_split:
+          type: number
+          default: 0.1
+        output_mode:
+          type: string
+          enum: [bbox_only, segmentation_only, bbox_and_segmentation]
+          default: bbox_and_segmentation
+        prompt_type:
+          type: string
+          enum: [text, bbox, point]
+          default: text
+      required: [name, classes]
+
+    DatasetList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Dataset"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [items, total, page, limit]
+
+    ImageItem:
+      type: object
+      properties:
+        id:
+          type: string
+        dataset_id:
+          type: string
+        filename:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        split:
+          type: string
+          enum: [train, val, test]
+        annotation_count:
+          type: integer
+        review_status:
+          type: string
+          enum: [pending, accepted, rejected, in_review]
+        url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dataset_id
+        - filename
+        - width
+        - height
+        - split
+        - annotation_count
+        - review_status
+        - url
+        - created_at
+
+    ImageList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImageItem"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [items, total, page, limit]
+
+    UploadResult:
+      type: object
+      properties:
+        uploaded:
+          type: integer
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+      required: [uploaded, failed, errors]
+
+    JobClass:
+      type: object
+      properties:
+        class_id:
+          type: integer
+        class_name:
+          type: string
+        prompt:
+          type: string
+      required: [class_id, class_name, prompt]
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        dataset_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled, paused]
+        progress:
+          type: number
+        processed_images:
+          type: integer
+        total_images:
+          type: integer
+        failed_images:
+          type: integer
+        classes:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobClass"
+        config:
+          $ref: "#/components/schemas/AutoLabelConfig"
+        error_message:
+          type: ["string", "null"]
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: ["string", "null"]
+          format: date-time
+        completed_at:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - dataset_id
+        - status
+        - progress
+        - processed_images
+        - total_images
+        - failed_images
+        - classes
+        - config
+        - created_at
+
+    AutoLabelConfig:
+      type: object
+      properties:
+        output_mode:
+          type: string
+          enum: [bbox_only, segmentation_only, bbox_and_segmentation]
+        confidence_threshold:
+          type: number
+          default: 0.35
+        min_mask_area:
+          type: integer
+          default: 80
+        max_detections_per_image:
+          type: integer
+          default: 50
+        polygon_simplification_epsilon:
+          type: number
+          default: 0.002
+        save_intermediate_masks:
+          type: boolean
+          default: true
+        review_required:
+          type: boolean
+          default: true
+      required: [output_mode]
+
+    AutoLabelJobInput:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        classes:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobClass"
+        config:
+          $ref: "#/components/schemas/AutoLabelConfig"
+      required: [dataset_id, classes, config]
+
+    JobList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [items, total, page, limit]
+
+    BboxXYXY:
+      type: array
+      items:
+        type: number
+      minItems: 4
+      maxItems: 4
+
+    PolygonPoint:
+      type: array
+      items:
+        type: number
+      minItems: 2
+      maxItems: 2
+
+    Annotation:
+      type: object
+      properties:
+        id:
+          type: string
+        image_id:
+          type: string
+        class_id:
+          type: integer
+        class_name:
+          type: string
+        confidence:
+          type: number
+        bbox_xyxy:
+          $ref: "#/components/schemas/BboxXYXY"
+        polygon:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/PolygonPoint"
+        mask_area:
+          type: ["integer", "null"]
+        point_count:
+          type: ["integer", "null"]
+        review_status:
+          type: string
+          enum: [pending, accepted, rejected]
+        source:
+          type: string
+          enum: [auto, manual]
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - image_id
+        - class_id
+        - class_name
+        - confidence
+        - bbox_xyxy
+        - review_status
+        - source
+        - created_at
+
+    AnnotationInput:
+      type: object
+      properties:
+        class_id:
+          type: integer
+        class_name:
+          type: string
+        bbox_xyxy:
+          $ref: "#/components/schemas/BboxXYXY"
+        polygon:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolygonPoint"
+      required: [class_id, class_name, bbox_xyxy]
+
+    AnnotationUpdate:
+      type: object
+      properties:
+        class_id:
+          type: integer
+        class_name:
+          type: string
+        review_status:
+          type: string
+          enum: [pending, accepted, rejected]
+        bbox_xyxy:
+          $ref: "#/components/schemas/BboxXYXY"
+        polygon:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolygonPoint"
+
+    ReprocessInput:
+      type: object
+      properties:
+        classes:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobClass"
+        confidence_threshold:
+          type: number
+          default: 0.35
+      required: [classes]
+
+    ReprocessResult:
+      type: object
+      properties:
+        image_id:
+          type: string
+        status:
+          type: string
+        annotation_count:
+          type: integer
+      required: [image_id, status, annotation_count]
+
+    Export:
+      type: object
+      properties:
+        id:
+          type: string
+        dataset_id:
+          type: string
+        format:
+          type: string
+          enum: [detection, segmentation, both]
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        download_url:
+          type: ["string", "null"]
+        file_size_bytes:
+          type: ["integer", "null"]
+        image_count:
+          type: integer
+        annotation_count:
+          type: integer
+        min_confidence:
+          type: number
+        include_rejected:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - dataset_id
+        - format
+        - status
+        - image_count
+        - annotation_count
+        - min_confidence
+        - include_rejected
+        - created_at
+
+    ExportInput:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        format:
+          type: string
+          enum: [detection, segmentation, both]
+          default: both
+        min_confidence:
+          type: number
+          default: 0.0
+        include_rejected:
+          type: boolean
+          default: false
+        splits:
+          type: array
+          items:
+            type: string
+            enum: [train, val, test]
+      required: [dataset_id, format]
+
+    DashboardStats:
+      type: object
+      properties:
+        total_datasets:
+          type: integer
+        total_images:
+          type: integer
+        total_annotations:
+          type: integer
+        completed_jobs:
+          type: integer
+        pending_review:
+          type: integer
+        running_jobs:
+          type: integer
+        recent_exports:
+          type: integer
+        server_status:
+          type: string
+        model_loaded:
+          type: boolean
+      required:
+        - total_datasets
+        - total_images
+        - total_annotations
+        - completed_jobs
+        - pending_review
+        - running_jobs
+        - recent_exports
+        - server_status
+        - model_loaded
